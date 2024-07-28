@@ -40,6 +40,9 @@ fizik_chat_id = 2140523692
 
 
 async def update_usernames(session: AsyncSession):
+    """
+    обновляем список пользователей в чате
+    """
     users = await session.execute(select(UserModel))
     for user in users.scalars():
         user.computed_name = str(user)
@@ -63,6 +66,7 @@ async def fetch_messages(client: TelegramClient, session: AsyncSession):
                                         func.min(MessageModel.id).label('two')
                                         ))
     max_message_id, min_message_id = list(data.all())[0]
+    print(max_message_id, min_message_id)
     
     #await engine.dispose()    
     channel: Channel = await client.get_entity(chat_id)
@@ -74,7 +78,8 @@ async def fetch_messages(client: TelegramClient, session: AsyncSession):
         
     # user = await client.get_entity(chat_id)
     # print(user)
-    async for message in client.iter_messages(chat, limit=5000, min_id=max_message_id or 0):
+    async for message in client.iter_messages(chat, limit=25000, min_id=max_message_id or 0, reverse=True):
+        print(message)
         try:
             assert isinstance(message, Message)
             # удаление, добавление пользователей и т.п.
@@ -126,6 +131,23 @@ async def update_channel_members(client, session):
     await session.commit()
 
 
+async def get_message(client: TelegramClient, chat: Channel, message_id: int):
+    item = await client.get_messages(chat, ids=[message_id])
+    return item[0]
+
+
+async def update_full_json(client: TelegramClient, session: AsyncSession):
+    data = await session.execute(select(MessageModel).where(MessageModel.message_json_data=='').order_by(MessageModel.date.desc()).limit(1000))
+    channel: Channel = await client.get_entity(chat_id)
+    for message in data.scalars():
+        print(message)
+        message.message_json_data = (await get_message(client, channel, message.id)).to_json(indent=2, ensure_ascii=False)
+        session.add(message)
+    await session.commit()
+
+
+
+
 async def update_reactions():
     # обновляем реакции в сообщениях. По умолчанию не знал что весь список реакций выдирается отдельно
     # поэтому выдирал только по 3 недавних
@@ -155,26 +177,6 @@ async def update_reactions():
         session.add_all(to_add)
         await session.commit()
 
-
-async def top_with_media():
-    stmt = select(MessageModel, UserModel).join(MessageModel.user).where(MessageModel.id.in_((404805,
-                                                                                              285512,
-                                                                                              355208,
-                                                                                              281101,
-                                                                                              256226
-                                                                                              )))
-    print(stmt)
-    messages = await session.execute(stmt)
-    chat: Channel = await client.get_entity(chat_id)
-
-    for message in messages.scalars():
-        assert isinstance(message, MessageModel)
-        print(message.message, message.id, message.user)
-
-        m: Message = (await client.get_messages(chat, ids=[message.id]))[0]
-        print(sum(x.count for x in m.reactions.results))
-        if m.media:
-            await m.download_media(f"{message.id}")
 
 
 async def get_all_message_replies(client: TelegramClient, message_id: int, channel: Channel):
@@ -218,50 +220,6 @@ async def post_messages():
     wb.save("test.xlsx")
 
 
-async def make_pdf():
-    stmt = text("""select m.message, m.id, u.computed_name, count(r.id)
-    from message m
-    inner join main.reaction r on m.id = r.message_id
-    inner join main.user u on u.id = m.user_id
-    group by m.message, m.id
-    order by count(r.id) desc
-    limit 10""")
-    from reportlab.platypus import Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib.units import cm
-    pdf = SimpleDocTemplate('test.pdf')
-    styles = getSampleStyleSheet()  # дефолтовые стили
-    # the magic is here
-    styles['Normal'].fontName = 'DejaVuSerif'
-    styles['Heading1'].fontName = 'DejaVuSerif'
-
-    pdfmetrics.registerFont(TTFont('DejaVuSerif', 'DejaVuSerif.ttf', 'UTF-8'))
-
-    flowables = [
-
-    ]
-
-    i = 1
-    for item in await session.execute(stmt):
-        message: Message = await client.get_messages(chat_id, ids=item[1])
-
-        flowables.append(Paragraph(f'{i}) - {item[2]} - {message.message.lower()}', styles['Normal']))
-        i += 1
-        address = '<link color="blue" href="' + f'https://t.me/c/{chat_id}/{message.id}' + '">ссылка на сообщение</link>'
-        flowables.append(Paragraph(address, styles['Normal']))
-
-        if message.media:
-            file = io.BytesIO()
-            await client.download_media(message, file)
-            file.seek(0)
-            from reportlab.platypus.flowables import Image
-
-            image = Image(file)
-            image._restrictSize(512, 512)
-            flowables.append(image)
-        flowables.append(Spacer(1 * cm, 1 * cm), )
-
-    pdf.build(flowables)
 
 
 async def main():
@@ -270,7 +228,9 @@ async def main():
     async with TelegramClient('session_name', api_id, api_hash) as client, async_session() as session:
         assert isinstance(client, TelegramClient)
         await fetch_messages(client, session)
-
+        # channel: Channel = await client.get_entity(chat_id)
+        # print(await get_message(client, channel, 467120))
+        # await update_full_json(client, session)
         #await print_dialogs(client)
         #await update_usernames(session)
             # m.media.document.

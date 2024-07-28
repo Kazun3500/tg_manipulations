@@ -1,52 +1,3 @@
---1) топ по количеству сообщений, реакций
-with users_data as (
-SELECT u.id, u.computed_name,
-count(r2.id) as reactions_from_user,
-count(cm.id) as active_now
-FROM user u
-LEFT JOIN reaction r2 on r2.user_id=u.id
-LEFT JOIN channel_members cm on cm.user_id=u.id
-GROUP BY u.id, u.computed_name
-),
-reactions_from_user as (
-    select r.user_id, r.emoji, count(r.id) as cnt
-    FROM reaction r
-    GROUP BY r.user_id, r.emoji
-),
-reactions_for_user as (
-    select m.user_id, r.emoji, count(r.id) as cnt
-    FROM reaction r
-    INNER JOIN message m on m.id=r.message_id
-    GROUP BY m.user_id, r.emoji
-),
-user_stats as (
-select DISTINCT u.id, u.computed_name,
-u.reactions_from_user, u.active_now,
-first_value(rfu.emoji) over (PARTITION BY u.id ORDER BY rfu.cnt desc) as reaction_to,
-first_value(rfu.cnt) over (PARTITION BY u.id ORDER BY rfu.cnt desc) as reaction_to_count,
- first_value(rfru.emoji) over (PARTITION BY u.id ORDER BY rfru.cnt desc) as reaction_from,
- first_value(rfru.cnt) over (PARTITION BY u.id ORDER BY rfru.cnt desc) as reaction_from_count
-FROM users_data u
-LEFT JOIN reactions_for_user rfu on rfu.user_id=u.id
-LEFT JOIN reactions_from_user rfru on rfru.user_id=u.id
-)
-select
-u.computed_name as "Имя пользователя",
-min(m.date) as "Дата первого собщения",
-max(m.date) as "Дата последнего сообщения",
- Count(m.id) as "Количество сообщений",
- count(r.id) as "Количестов реакций",
- cast(count(r.id) as REAL)/Count(m.id) as "Полезность сообщений (количество реакций/количество сообщений)",
- u.reactions_from_user as "Количество реакций",
- u.reaction_to as "Реакцию ставят на сообщения пользователя",
- u.reaction_to_count as "Количество",
- u.reaction_from as "Пользователь ставит реакцию другим",
- u.reaction_from_count as "Количество"
-from user_stats u
-LEFT JOIN message m on m.user_id=u.id
-LEFT JOIN reaction r on r.message_id=m.id
-GROUP BY u.computed_name
-
 -- статистика по реакциям
 ;
 select m.message, m.id, u.computed_name, count(r.id)
@@ -168,3 +119,7 @@ select
 from daily d
              ) as d
 inner join for_avg fa on fa.time=d.time
+
+;
+
+

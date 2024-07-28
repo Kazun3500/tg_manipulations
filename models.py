@@ -64,6 +64,7 @@ class Message(Base):
     channel: Mapped[Channel] = relationship(back_populates="messages")
     channel_id: Mapped[int] = mapped_column(ForeignKey("channel.id"))
     message: Mapped[str]
+    message_json_data: Mapped[str] = mapped_column(default='')
     date: Mapped[datetime.datetime]
     user: Mapped[User] = relationship(back_populates="messages")
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))

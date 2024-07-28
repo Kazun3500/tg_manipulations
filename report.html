@@ -45,6 +45,24 @@
 {% endmacro %}
 <body>
      {{ render_table(base_stats) }}
+     <ol>
+        {% for item in top_list %}
+            <li>
+                <div>
+                    <p>{{ item.username }}. {{ item.message }} ({{ item.id }}). Всего - {{ item.count }}. Детально - {{ item.text_stats }}</p>
+                    {% if not item.deleted %}
+                    	<p><a href="{{ item.link }}">ссылка на сообщение</a></p>
+                    {% endif %}
+                    {% if item.media %}
+                    	<p><img src="data:image/png;base64,{{ item.media }}" alt="Картинка"></img></p>
+                    {% endif %}
+                </div>
+            </li>
+
+     {% endfor %}
+     </ol>
+
+
 </body>
 
 <style>
